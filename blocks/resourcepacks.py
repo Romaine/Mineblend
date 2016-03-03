@@ -58,8 +58,11 @@ def load(archive):
                 fn = file.filename  # Yes, I just did that.
                 if fn.startswith(blockpath) and fn.endswith(".png"):
                     myzip.extract(file.filename, MCPATH)
-                    two_paths = path.join(MCPATH + os.sep + fn)
-                    bpy.data.images.load(two_paths)
+                    full_path = path.join(MCPATH + os.sep + fn)
+                    if fn in bpy.data.images:
+                        pass
+                    else:
+                        bpy.data.images.load(full_path)
     else:
         print("pack not found")
 
