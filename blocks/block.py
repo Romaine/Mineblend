@@ -1,14 +1,51 @@
-import pickle
 import bpy
 import bmesh
+import json
+import os
+import pickle
+import pprint
+
 from enum import Enum
+from collections import defaultdict
+from mathutils import Vector
+from os import path
+
+from Mineblend.sysutil import MCPATH
+from Mineblend.blocks import resourcepacks
 
 
 class Block():
 
     """This provides ability to create minecraft blocks in blender."""
 
+    MBDIR = os.path.join(MCPATH, 'mineblend')
+
+    if not os.path.exists(MBDIR):
+        os.makedirs(MBDIR)
+
     preview_location = (0, 0, 1.01)
+    models = {}
+
+    assets = path.join(MBDIR, resourcepacks.assets)
+    states = path.join(MBDIR, resourcepacks.states)
+    textures = path.join(MBDIR, resourcepacks.textures)
+
+    if not path.exists(textures):
+        resourcepacks.setup_textures()
+
+    models["item"] = {}
+    models["block"] = {}
+    for root, dirs, files in os.walk(path.join(MBDIR, resourcepacks.models)):
+        if files:
+            for file in files:
+                model = path.join(root, file)
+                models["block"][file] = {}
+                with open(model) as f:
+                    file = file.split(".")[0]
+                    if root.split(os.sep)[-1] == "block":
+                        models["block"][file] = json.load(f)
+                    elif root.split(os.sep)[-1] == "item":
+                        models["item"][file] = json.load(f)
 
     def __init__(self):
         self.name = ""
@@ -20,10 +57,11 @@ class Block():
         self.mesh = None
         self.material = None
         self.object = None
+        self.model_stack = {}
 
     def load_defs(self):
         """Loads the definitions of Minecaft block data values."""
-        with open("blocks.pkl", "rb") as f:
+        with open(path.join(path.dirname(__file__), "../blocks.pkl"), "rb") as f:
             unpickle = pickle.Unpickler(f)
             self.defs = unpickle.load()
 
@@ -32,17 +70,20 @@ class Block():
         self.name = self.find_name(dvs)
         self.location = location
 
-        ConstructType.block(self)
+        self.mesh = bpy.data.meshes.new('tempmesh')
+        self.readState()
+        self.generate_mesh()
+        self.object = bpy.data.objects.new(self.name, self.mesh)
         Material.diffuse(self)
 
         self.object.name = self.name
         self.mesh.name = self.name
         self.object.active_material = self.material
 
-        self.uv_textures()
+        bpy.context.scene.objects.link(self.object)
+        self.object.location = self.location
 
-    def uv_textures(self):
-        bm = bmesh.new()
+    def uv_textures(self, bm):
         bm.from_mesh(self.mesh)
 
         bm.loops.layers.uv.new()
@@ -59,6 +100,62 @@ class Block():
             face.loops[3][uv_layer].uv = (1, 0)
 
         bm.to_mesh(self.mesh)
+
+    def readState(self):
+        filepath = self.name.lower() + ".json"
+        with open(path.join(Block.states, filepath)) as state:
+            state = json.load(state)
+
+        if "variants" in state:
+            for variant in state["variants"]:
+                model_filename = variant["model"]
+                self.compile_model_stack(model_filename)
+
+    def compile_model_stack(self, filename):
+        filename = filename.split("/")[-1]
+        if filename in Block.models["block"]:
+            for k, v in Block.models["block"][filename].items():
+                if k == "parent":
+                    self.compile_model_stack(v)
+                else:
+                    if k in self.model_stack:
+                        for k2, v2 in Block.models["block"][filename][k].items():
+                            self.model_stack[k][k2] = v2
+                    else:
+                        self.model_stack[k] = v
+                    print("model stack updated")
+
+    def generate_mesh(self):
+
+        elements = self.model_stack["elements"]
+        for element in elements:
+            bm = bmesh.new()
+            vf = Vector(element["from"]) / 16
+            vt = Vector(element["to"]) / 16
+
+            x = 0
+            y = 2
+            z = 1
+
+            one = bm.verts.new(Vector((vf[x], vf[y], -vf[z])))
+            two = bm.verts.new(Vector((vf[x], vt[y], -vf[z])))
+            three = bm.verts.new(Vector((vt[x], vt[y], -vf[z])))
+            four = bm.verts.new(Vector((vt[x], vf[y], -vf[z])))
+
+            five = bm.verts.new(Vector((vf[x], vf[y], -vt[z])))
+            six = bm.verts.new(Vector((vf[x], vt[y], -vt[z])))
+            seven = bm.verts.new(Vector((vt[x], vt[y], -vt[z])))
+            eight = bm.verts.new(Vector((vt[x], vf[y], -vt[z])))
+
+            down = bm.faces.new((seven, eight, five, six))
+            up = bm.faces.new((three, two, one, four))
+            north = bm.faces.new((two, three, seven, six))
+            south = bm.faces.new((four, one, five, eight))
+            west = bm.faces.new((one, two, six, five))
+            east = bm.faces.new((three, four, eight, seven))
+
+            self.uv_textures(bm)
+            bm.to_mesh(self.mesh)
 
     def find_name(self, dvs):
         dv1, dv2 = dvs
@@ -93,12 +190,14 @@ class Material():
     def diffuse(self):
         mat = bpy.data.materials.new(self.name)
         mat.use_nodes = True
-        mat.node_tree.nodes['Diffuse BSDF']
+        # mat.node_tree.nodes['Diffuse BSDF']
         group_node = mat.node_tree.nodes.new("ShaderNodeGroup")
         group_node.node_tree = Material.group
         tex = mat.node_tree.nodes.new(type="ShaderNodeTexImage")
-        tex.image = bpy.data.images["stone_" +
-                                    self.name.replace(" ", "_").lower() +
+        # tex.image = bpy.data.images["stone_" +
+        #                            self.name.replace(" ", "_").lower() +
+        #                            ".png"]
+        tex.image = bpy.data.images[self.name.replace(" ", "_").lower() +
                                     ".png"]
         tex.interpolation = "Closest"
         mat.node_tree.links.new(tex.outputs[0], group_node.inputs["Image"])
@@ -107,33 +206,14 @@ class Material():
         self.material = mat
 
 
-class ConstructType(Enum):
-
-    def block(self):
-        bpy.ops.mesh.primitive_cube_add(radius=1,
-                                        view_align=False,
-                                        enter_editmode=False,
-                                        location=Block.preview_location)
-        self.object = bpy.context.object
-        self.mesh = bpy.context.object.data
-
-    def _cross():
-        bpy.ops.mesh.primitive_plane_add(raduis=1,
-                                         view_align=False,
-                                         location=Block.preview_location)
-
-    def _stairs():
-        pass
-
-    def _fence():
-        pass
-
-
 def main():
     graniteblock = Block()
-    dvs = [1, 1]
+    dvs = [5, 2]
     graniteblock.create_block(dvs)
     print(graniteblock.name)
+    print(graniteblock.model_stack)
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(graniteblock.model_stack)
 
 if __name__ == '__main__':
     main()

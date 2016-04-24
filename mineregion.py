@@ -27,8 +27,8 @@
 # what's a good way to swap out the world-choice dialogue for a custom path input??
 
 #"Surface only": use the heightmap and only load surface.
-#Load more than just the top level, obviously, cos of cliff 
-#walls, caves, etc. water should count as transparent for this process, 
+#Load more than just the top level, obviously, cos of cliff
+#walls, caves, etc. water should count as transparent for this process,
 #as should glass, flowers, torches, portal; all nonsolid block types.
 
 #"Load horizon" / "load radius": should be circular, or have options
@@ -37,13 +37,13 @@ import bpy
 from bpy.props import FloatVectorProperty
 from mathutils import Vector
 import numpy as npy
-from . import blockbuild
-from . import sysutil
+from Mineblend import blockbuild
+from Mineblend import sysutil
 #using blockbuild.createMCBlock(mcname, diffuseColour, mcfaceindices)
 #faceindices order: (bottom, top, right, front, left, back)
 #NB: this should probably change, as it was started by some uv errors.
 
-from . import nbtreader
+from Mineblend import nbtreader
 #level.dat, .mcr McRegion, .mca Anvil: all different formats, but all are NBT.
 
 import sys, os, gzip
@@ -60,8 +60,8 @@ totalchunks = 0
 wseed = None	#store chosen world's worldseed, handy for slimechunk calcs.
 
 MCREGION_VERSION_ID = 0x4abc;	# Check world's level.dat 'version' property for these.
-ANVIL_VERSION_ID = 0x4abd;		# 
-    
+ANVIL_VERSION_ID = 0x4abd;		#
+
 #TODO: Retrieve these from bpy.props properties stuck in the scene RNA.
 EXCLUDED_BLOCKS = [1, 3, 87]    #(1,3,87) # hack to reduce loading / slowdown: (1- Stone, 3- Dirt, 87 netherrack). Other usual suspects are Grass,Water, Leaves, Sand,StaticLava
 
@@ -109,7 +109,7 @@ BLOCKS_OTHER = { # Basically all opaque building blocks that don't have special 
     1, 2, 3, 4, 7, 12, 13, 14, 15, 16, 17, 21, 22, 24, 35,
     41, 42, 45, 48, 49, 56, 57, 60, 73, 74, 78, 80, 82, 87,
     88, 89, 90, 110, 112, 120, 121, 129, 133, 152, 153, 155,
-    159, 162, 168, 170, 172, 173, 174, 179, 
+    159, 162, 168, 170, 172, 173, 174, 179,
     -1, -2, -3, -4, -7, -12, -13, -14, -15, -16, -17, -21, -22, -24, -35,
     -41, -42, -45, -48, -49, -56, -57, -60, -73, -74, -78, -80, -82, -87,
     -88, -89, -90, -110, -112, -120, -121, -129, -133, -152, -153, -155,
@@ -275,7 +275,7 @@ BLOCKVARIANTS = {
                       ['Jungle',(89,70,27), [450,450,449,449,449,449]],
                     ],
                 #TODO: adjust leaf types, too!
-                
+
                 24: [ [''],#normal 'cracked' sandstone
                       ['Decor', (215,209,153), [403,403,301,301,301,301]],
                       ['Smooth',(215,209,153), [403,403,371,371,371,371]],
@@ -315,7 +315,7 @@ BLOCKVARIANTS = {
                       ['StnBrk', (100,100,100), [85]*6],
                       [''],
                     ],
-                
+
                 #slabs
                 44: [ [''], #stone slabs (default)
                       ['SndStn', (215,209,153), [192]*6],
@@ -325,7 +325,7 @@ BLOCKVARIANTS = {
                       ['StnBrk', (100,100,100), [54]*6],
                       [''],
                     ],
-                    
+
                 50: [ [''], #nowt on 0...
                       ['Ea'],	#None for colour, none Tex, then: CUSTOM MESH
                       ['We'],
@@ -333,7 +333,7 @@ BLOCKVARIANTS = {
                       ['Nr'],
                       ['Up']
                     ],
-                    
+
                 59: [ ['0', (160,184,0), [88]*6],   #?
                       ['1', (160,184,0), [89]*6],
                       ['2', (160,184,0), [90]*6],
@@ -361,7 +361,7 @@ BLOCKVARIANTS = {
                       ['Red', (188,51,46), [325]*6],
                       ['Black', (28,23,23), [264]*6]
                       ],
-                
+
                 #stone brick moss/crack/circle variants:
                 98: [ [''],
                       ['Mossy',  (100,100,100), [181]*6],
@@ -454,7 +454,7 @@ def readRegion(fname, vertexBuffer):
 
         offset = unpack(">i", b'\x00'+cheadr[0:3])[0]
         chunksectorcount = cheadr[3]    #last of the 4 bytes is the size (in 4k sectors) of the chunk
-        
+
         chunksLoaded = 0
         if offset != 0 and chunksectorcount != 0:    #chunks not generated as those coordinates yet will be blank!
             chunkdata = readChunk(rfile, offset, chunksectorcount)    #TODO Make sure you seek back to where you were to start with ...
@@ -494,7 +494,7 @@ Just remember: in Minecraft, Y points to the sky."""
     vx = -(chunkPos[1] << 4) - blockPos[2]
     vy = -(chunkPos[0] << 4) - blockPos[0]   # -x of chunkpos and -x of blockPos (x,y,z)
     vz = blockPos[1]    #Minecraft's Y.
-    
+
     return Vector((vx,vy,vz))
 
 
@@ -537,7 +537,7 @@ This also ensures material and name are set."""
     shapeParams = None
     if len(bdat) > 5:   #and objectShape = 'insets'
         shapeParams = bdat[5]
-    
+
     cycParams = None
     if OPTIONS['usecycles']:
         if len(bdat) > 6:
@@ -549,7 +549,7 @@ This also ensures material and name are set."""
         else:
             cycParams['genTextures']=False
             cycParams['diffuseRGB']=[colourtriple[0]/255, colourtriple[1]/255, colourtriple[2]/255, 1]
-    
+
     nameVariant = ''
     if blockID in BLOCKVARIANTS:
         variants = BLOCKVARIANTS[blockID]
@@ -595,7 +595,7 @@ def slimeOn():
 
     #Create cube! (maybe give it silly eyes...)
     #ensure 3d cursor at 0...
-    
+
     bpy.ops.mesh.primitive_cube_add()
     slimeOb = bpy.context.object    #get ref to last created ob.
     slimeOb.name = 'slimeMarker'
@@ -656,14 +656,14 @@ def getWorldSelectList():
                 except IOError:
                     print("Unknown problem with level.dat format for %s" % sf)
                     continue
-					
+
                 # FIXME - having a problem
                 try:
                     if 'LevelName' in wData.value['Data'].value:
                         wname = wData.value['Data'].value['LevelName'].value
                     else:
                         wname = "<no name>"
-					
+
                     wsize = wData.value['Data'].value['SizeOnDisk'].value
                     readableSize = "(%0.1f)" % (wsize / (1024*1024))
                     worldList.append((sf, sf, wname + " " + readableSize))
@@ -766,7 +766,7 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
             print('nether LOAD!')
         else:
             print('Nether is present, but not chosen to load.')
-    
+
     if os.path.exists('DIM1'):
         if OPTIONS['loadend']:
             print('load The End...')
@@ -799,7 +799,7 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
         spY = worldData.value['Data'].value['SpawnY'].value
         spZ = worldData.value['Data'].value['SpawnZ'].value
         pPos = [float(spX), float(spY), float(spZ)]
-        
+
         #create empty markers for each player.
         #and: could it load multiplayer nether/end based on player loc?
 
@@ -837,7 +837,7 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
     bpy.context.scene.objects.link(WORLD_ROOT)
     WORLD_ROOT.empty_draw_size = 2.0
     WORLD_ROOT.empty_draw_type = 'SPHERE'
-    
+
     regionfiles = []
     regionreader = None
     if worldFormat == 'mcregion':
@@ -853,7 +853,7 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
 
     #except when loading nether...
     playerChunk = toChunkPos(pPos[0], pPos[2])  # x, z
-    
+
     print("Loading %d blocks around centre." % loadRadius)
     #loadRadius = 10 #Sane amount: 5 or 4.
 
@@ -870,10 +870,10 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
 
     #total chunk count across region files:
     REPORTING['totalchunks'] = 0
-    
+
     pX = int(playerChunk[0])
     pZ = int(playerChunk[1])
-    
+
     print('Loading a square halfwidth of %d chunks around load position, so creating chunks: %d,%d to %d,%d' % (loadRadius, pX-loadRadius, pZ-loadRadius, pX+loadRadius, pZ+loadRadius))
 
     if (OPTIONS['showslimes']):
@@ -985,7 +985,7 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
     if len(unknownBlockIDs) > 0:
         print("Unknown new Minecraft datablock IDs encountered:")
         print(" ".join(["%d" % bn for bn in unknownBlockIDs]))
-    
+
     #Viewport performance hides:
     if (OPTIONS['fasterViewport']):
         hideIfPresent('mcStone')

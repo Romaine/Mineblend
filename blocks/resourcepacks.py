@@ -1,4 +1,9 @@
-"""Handles the loading of resource packs."""
+""" Handles the loading of resource packs.
+
+    This gets messy. Cause; windows!
+
+    \\ is love, \\ is life
+"""
 
 import bpy
 import os
@@ -6,24 +11,29 @@ import sys
 
 from os import path
 from zipfile import ZipFile
+from Mineblend.sysutil import MCPATH
 
-if sys.platform == 'darwin':
-    MCPATH = os.path.join(
-        os.environ['HOME'], 'Library', 'Application Support', 'minecraft')
-elif sys.platform == 'linux':
-    MCPATH = os.path.join(os.environ['HOME'], '.minecraft')
-else:
-    MCPATH = os.path.join(os.environ['APPDATA'], '.minecraft')
+
+settings = path.join(MCPATH, "options.txt")
+versions = path.join(MCPATH, "versions")
+archive = path.sep.join([versions, "1.9", "1.9.jar"])
+
+assets = path.join("assets", "minecraft")
+
+textures = path.join(assets, "textures")
+states = path.join(assets, "blockstates")
+models = path.join(assets, "models")
+
+MBDIR = os.path.join(MCPATH, 'mineblend')
+
+if not path.exists(MBDIR):
+    os.makedirs(MBDIR)
 
 
 def setup_textures():
     """ load the resource packs selected in game.  If none are found, load the
         textures from the games jar.
     """
-
-    settings = path.join(MCPATH, "options.txt")
-    versions = path.join(MCPATH, "versions")
-    archive = path.sep.join([versions, "1.8", "1.8.jar"])
 
     if path.exists(versions):
         load(archive)
@@ -48,21 +58,23 @@ def setup_textures():
 
 def load(archive):
     """Take the archive file to be loaded into blender."""
-    if path.exists(archive):
-        blockpath = path.sep.join(["assets",
-                                   "minecraft",
-                                   "textures",
-                                   "blocks"])
+    if os.path.exists(archive):
         with ZipFile(archive) as myzip:
-            for file in myzip.filelist:
-                fn = file.filename  # Yes, I just did that.
-                if fn.startswith(blockpath) and fn.endswith(".png"):
-                    myzip.extract(file.filename, MCPATH)
-                    full_path = path.join(MCPATH + os.sep + fn)
+            for file in myzip.namelist():
+                fn = path.normpath(file) # Yes, I just did that
+                if fn.startswith(textures) and fn.endswith(".png"):
+                    myzip.extract(file, MBDIR)
                     if fn in bpy.data.images:
+                        # Eventually add a way to remove duplicates, maybe just
+                        # by replacing the image
                         pass
                     else:
-                        bpy.data.images.load(full_path)
+                        bpy.data.images.load(os.sep.join([MBDIR,fn]))
+                else:
+                    if fn.startswith(states) and not fn.endswith("/"):
+                        myzip.extract(file, MBDIR)
+                    elif fn.startswith(models) and not fn.endswith("/"):
+                        myzip.extract(file, MBDIR)
     else:
         print("pack not found")
 
@@ -70,6 +82,7 @@ def load(archive):
 def main():
     """Just runs load_textures()."""
     setup_textures()
+
 
 if __name__ == '__main__':
     main()
