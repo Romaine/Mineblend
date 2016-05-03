@@ -2,11 +2,8 @@ import bpy
 import bmesh
 import json
 import os
-import pickle
 import pprint
 
-from enum import Enum
-from collections import defaultdict
 from mathutils import Vector
 from os import path
 
@@ -23,8 +20,11 @@ class Block():
     if not os.path.exists(MBDIR):
         os.makedirs(MBDIR)
 
+    def_path = "../definitions/vanilla_ids.json"
+    with open(path.join(path.dirname(__file__), def_path), "r") as f:
+        defs = json.load(f)
+
     preview_location = (0, 0, 1.01)
-    models = {}
 
     assets = path.join(MBDIR, resourcepacks.assets)
     states = path.join(MBDIR, resourcepacks.states)
@@ -33,6 +33,7 @@ class Block():
     if not path.exists(textures):
         resourcepacks.setup_textures()
 
+    models = {}
     models["item"] = {}
     models["block"] = {}
     for root, dirs, files in os.walk(path.join(MBDIR, resourcepacks.models)):
@@ -51,24 +52,39 @@ class Block():
         self.name = ""
         self.colour = ()
         self.location = ()
-        self.defs = {}
-        self.load_defs()
         self.construct = None
         self.mesh = None
         self.material = None
         self.object = None
         self.model_stack = {}
 
-    def load_defs(self):
-        """Loads the definitions of Minecaft block data values."""
-        with open(path.join(path.dirname(__file__), "../blocks.pkl"), "rb") as f:
-            unpickle = pickle.Unpickler(f)
-            self.defs = unpickle.load()
+    def find_name(self, dvs):
+        dv1, dv2 = dvs
+        for block in self.defs["data"]:
+            if block["id"] == dv1:
+                if dv2 == 0:
+                    self.name = block["name"]
+                    self.colour = block["color"]
+                else:
+                    for variant in block["variants"]:
+                        if variant["data"] == dv2:
+                            self.name = variant["name"]
+                            self.colour = variant["color"]
+
+    def to_filename(self):
+        segments = [segment.lower() for segment in self.name.split()]
+        print(segments)
+        for idx, segment in enumerate(segments):
+            if segment == "wood":
+                segments.pop(idx)
+                segments[-1] = segments[-1] + "s"
+                print("segments", segments)
+                return "_".join(segments) + ".json"
 
     def create_block(self, dvs, location=preview_location):
         "Create a block; anything that has an int location rather than float"
-        self.name = self.find_name(dvs)
         self.location = location
+        self.find_name(dvs)
 
         self.mesh = bpy.data.meshes.new('tempmesh')
         self.readState()
@@ -102,7 +118,8 @@ class Block():
         bm.to_mesh(self.mesh)
 
     def readState(self):
-        filepath = self.name.lower() + ".json"
+        print(self.name)
+        filepath = self.to_filename()
         with open(path.join(Block.states, filepath)) as state:
             state = json.load(state)
 
@@ -156,10 +173,6 @@ class Block():
 
             self.uv_textures(bm)
             bm.to_mesh(self.mesh)
-
-    def find_name(self, dvs):
-        dv1, dv2 = dvs
-        return self.defs[dv1][dv2][0]
 
 
 class Material():
