@@ -24,7 +24,7 @@ class Block():
     with open(path.join(path.dirname(__file__), def_path), "r") as f:
         defs = json.load(f)
 
-    preview_location = (0, 0, 1.01)
+    preview_location = (0, 0, 0)
 
     assets = path.join(MBDIR, resourcepacks.assets)
     states = path.join(MBDIR, resourcepacks.states)
@@ -66,9 +66,18 @@ class Block():
             if block["type"] == dv1:
                 if block["meta"] == dv2:
                     self.name = block["name"]
-                    self.name_ = block["name"].lower().split(" ")
-                    self.name_[-1] = block["text_type"].split("_")[-1]
-                    self.name_ = "_".join(self.name_)
+                    segments = block["name"].lower().split(" ")
+                    segments[-1] = block["text_type"].split("_")[-1]
+                    print("double" in segments)
+                    if "double" in segments:
+                        segments.insert(1,
+                                        segments
+                                        .pop(segments
+                                             .index("double")))
+                        print(segments)
+                    print(segments)
+
+                    self.name_ = "_".join(segments)
                     self.text_type = block["text_type"]
 
     def to_filename(self):
@@ -88,6 +97,11 @@ class Block():
 
         self.mesh = bpy.data.meshes.new('tempmesh')
         self.readState()
+
+        self.textures = self.model_stack["textures"]
+        pp = pprint.PrettyPrinter(indent=4)
+        pp.pprint(self.model_stack)
+
         self.generate_mesh()
         print(self.name)
         self.object = bpy.data.objects.new(self.name, self.mesh)
@@ -98,7 +112,13 @@ class Block():
         bpy.context.scene.objects.link(self.object)
         self.object.location = self.location
 
-    def textures(self, bm, element):
+    def to_path(self, pointer):
+        if pointer.startswith("#"):
+            return self.to_path(self.textures[pointer[1:]])
+        else:
+            return pointer
+
+    def sort_textures(self, bm, element):
         bm.from_mesh(self.mesh)
 
         # UV's
@@ -110,32 +130,13 @@ class Block():
         nFaces = len(bm.faces)
         print(nFaces)
 
-        for face in bm.faces:
-            face.loops[0][uv_layer].uv = (1, 1)
-            face.loops[1][uv_layer].uv = (0, 1)
-            face.loops[2][uv_layer].uv = (0, 0)
-            face.loops[3][uv_layer].uv = (1, 0)
-
         # Images
 
-        textures = self.model_stack["textures"]
-        refs = {}
-
-        for tex in textures.items():
-            print(tex)
-            if not tex[1].startswith("#"):
-                refs[tex[0]] = tex[1]
-
-        for tex in textures.items():
-            for ref in refs:
-                if tex[1].startswith("#") and tex[1][1:] in refs:
-                    textures[tex[0]] = refs[tex[1][1:]]
-
-        for i, v in enumerate(set(refs.values())):
-
-            name = v.split(os.sep)[-1]
+        # Create appropriate matreials
+        for i, v in enumerate(self.textures.values()):
+            print("vaaalooo", v)
+            name = self.to_path(v).split("/")[-1]
             mat = Material.diffuse(self, name)
-
             print("made new material ", mat)
 
             if name in self.mesh.materials:
@@ -152,18 +153,29 @@ class Block():
 
         face_data = element["element"]["faces"]  # model data
 
-        #  for each defined face,
-        for k, v in face_data.items():
-            # print("TEXTURES", textures)
-            for d, face_texture in textures.items():
-                if d in textures:
-                    face = element[k]
-                    for i, mat in enumerate(self.mesh.materials):
-                        if mat.name.split(".")[0] == textures[k].split("/")[1]:
-                            # print(mat.name, " == ", face_texture)
-                            face.material_index = i
-                        else:
-                            pass  # print(mat.name, " != ", face_texture)
+        # Assign materials to respective faces.
+
+        for face, data in face_data.items():
+            texture = self.to_path(data["texture"])
+
+            #  Commence MLG UV foo
+            if "uv" in data:
+                uv = 1 / 16 * Vector(data["uv"])
+                print(uv)
+                x1, y1, x2, y2 = 1 / 16 * Vector(data["uv"])
+                element[face].loops[0][uv_layer].uv = (x2, y1)
+                element[face].loops[1][uv_layer].uv = (x1, y1)
+                element[face].loops[2][uv_layer].uv = (x1, y2)
+                element[face].loops[3][uv_layer].uv = (x2, y2)
+            else:
+                element[face].loops[0][uv_layer].uv = (1, 0)
+                element[face].loops[1][uv_layer].uv = (0, 0)
+                element[face].loops[2][uv_layer].uv = (0, 1)
+                element[face].loops[3][uv_layer].uv = (1, 1)
+
+            for i, mat in enumerate(self.mesh.materials):
+                if mat.name.split(".")[0] == texture.split("/")[1]:
+                    element[face].material_index = i
 
             # @TODO Stop images of the same name from overwriting eachother
             #       by prepending their path.
@@ -172,23 +184,30 @@ class Block():
 
     def readState(self):
         print(self.name)
-        filepath = self.name_ + ".json"
-        with open(path.join(Block.states, filepath)) as state:
+        filepath = path.join(Block.states, self.name_ + ".json")
+        if not path.exists(filepath):
+                segments = self.name_.split("_")
+                switch = segments.pop(0)
+                self.name_ = "_".join(segments)
+                filepath = path.join(Block.states, self.name_ + ".json")
+
+        with open(filepath) as state:
             state = json.load(state)
 
         if "variants" in state:
             for variant in state["variants"].values():
                 if isinstance(variant, dict):
-                    print("variant", variant["model"])
-                    model_filename = variant["model"]
+                        print("variant", variant["model"])
+                        model_filename = variant["model"]
+
                 else:
                     print("variant", variant[0]["model"])
                     model_filename = variant[0]["model"]
         else:
-            for part in state["multipart"].values():
+            for part in state["multipart"]:
                 if isinstance(part, dict):
-                    print("variant", variant["model"])
-                    model_filename = variant["model"]
+                    print("variant", part["model"])
+                    model_filename = part["model"]
                 else:
                     print("variant", variant[0]["model"])
 
@@ -219,15 +238,15 @@ class Block():
             y = 2
             z = 1
 
-            one = bm.verts.new(Vector((vf[x], vf[y], -vf[z])))
-            two = bm.verts.new(Vector((vf[x], vt[y], -vf[z])))
-            three = bm.verts.new(Vector((vt[x], vt[y], -vf[z])))
-            four = bm.verts.new(Vector((vt[x], vf[y], -vf[z])))
+            one = bm.verts.new(Vector((vf[x], -vf[y], vf[z])))
+            two = bm.verts.new(Vector((vf[x], -vt[y], vf[z])))
+            three = bm.verts.new(Vector((vt[x], -vt[y], vf[z])))
+            four = bm.verts.new(Vector((vt[x], -vf[y], vf[z])))
 
-            five = bm.verts.new(Vector((vf[x], vf[y], -vt[z])))
-            six = bm.verts.new(Vector((vf[x], vt[y], -vt[z])))
-            seven = bm.verts.new(Vector((vt[x], vt[y], -vt[z])))
-            eight = bm.verts.new(Vector((vt[x], vf[y], -vt[z])))
+            five = bm.verts.new(Vector((vf[x], vf[y], vt[z])))
+            six = bm.verts.new(Vector((vf[x], vt[y], vt[z])))
+            seven = bm.verts.new(Vector((vt[x], vt[y], vt[z])))
+            eight = bm.verts.new(Vector((vt[x], vf[y], vt[z])))
 
             down = bm.faces.new((seven, eight, five, six))
             up = bm.faces.new((three, two, one, four))
@@ -238,7 +257,7 @@ class Block():
 
             print("\n", "locals", locals(), "\n")
 
-            self.textures(bm, locals())
+            self.sort_textures(bm, locals())
             bm.to_mesh(self.mesh)
 
 
@@ -268,7 +287,7 @@ class Material():
     group.links.new(mix.outputs[0], mat.inputs[0])
 
     def diffuse(self, image_name=False):
-        mat = bpy.data.materials.new(image_name)
+        mat = bpy.data.materials.new(self.to_path(image_name))
         mat.use_nodes = True
         # mat.node_tree.nodes['Diffuse BSDF']
         group_node = mat.node_tree.nodes.new("ShaderNodeGroup")
@@ -284,7 +303,7 @@ class Material():
 
 def main():
     graniteblock = Block()
-    dvs = [23, 0]
+    dvs = [62, 0]
     graniteblock.create_block(dvs)
     print(graniteblock.name)
     print(graniteblock.model_stack)
