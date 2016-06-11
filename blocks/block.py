@@ -243,10 +243,10 @@ class Block():
             three = bm.verts.new(Vector((vt[x], -vt[y], vf[z])))
             four = bm.verts.new(Vector((vt[x], -vf[y], vf[z])))
 
-            five = bm.verts.new(Vector((vf[x], vf[y], vt[z])))
-            six = bm.verts.new(Vector((vf[x], vt[y], vt[z])))
-            seven = bm.verts.new(Vector((vt[x], vt[y], vt[z])))
-            eight = bm.verts.new(Vector((vt[x], vf[y], vt[z])))
+            five = bm.verts.new(Vector((vf[x], -vf[y], vt[z])))
+            six = bm.verts.new(Vector((vf[x], -vt[y], vt[z])))
+            seven = bm.verts.new(Vector((vt[x], -vt[y], vt[z])))
+            eight = bm.verts.new(Vector((vt[x], -vf[y], vt[z])))
 
             down = bm.faces.new((seven, eight, five, six))
             up = bm.faces.new((three, two, one, four))
