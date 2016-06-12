@@ -248,8 +248,8 @@ class Block():
             seven = bm.verts.new(Vector((vt[x], -vt[y], vt[z])))
             eight = bm.verts.new(Vector((vt[x], -vf[y], vt[z])))
 
-            down = bm.faces.new((seven, eight, five, six))
-            up = bm.faces.new((three, two, one, four))
+            down = bm.faces.new((six, five, eight, seven))
+            up = bm.faces.new((four, one, two, three))
             north = bm.faces.new((two, three, seven, six))
             south = bm.faces.new((four, one, five, eight))
             west = bm.faces.new((one, two, six, five))
@@ -303,7 +303,7 @@ class Material():
 
 def main():
     graniteblock = Block()
-    dvs = [62, 0]
+    dvs = [1, 1]
     graniteblock.create_block(dvs)
     print(graniteblock.name)
     print(graniteblock.model_stack)
