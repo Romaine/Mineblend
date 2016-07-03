@@ -1,5 +1,6 @@
 import bpy
 import bmesh
+import colorsys
 import json
 import os
 import pprint
@@ -30,9 +31,6 @@ class Block():
     states = path.join(MBDIR, resourcepacks.states)
     textures = path.join(MBDIR, resourcepacks.textures)
 
-    if not path.exists(textures):
-        resourcepacks.setup_textures()
-
     models = {}
     models["item"] = {}
     models["block"] = {}
@@ -51,7 +49,7 @@ class Block():
     def __init__(self):
         self.name = ""
         self.name_ = ""
-        self.text_type = ""
+        self.blockstate = ""
         self.colour = ()
         self.location = ()
         self.construct = None
@@ -60,37 +58,7 @@ class Block():
         self.object = None
         self.model_stack = {}
 
-    def find_name(self, dvs):
-        dv1, dv2 = dvs
-        for block in self.defs:
-            if block["type"] == dv1:
-                if block["meta"] == dv2:
-                    self.name = block["name"]
-                    segments = block["name"].lower().split(" ")
-                    segments[-1] = block["text_type"].split("_")[-1]
-                    print("double" in segments)
-                    if "double" in segments:
-                        segments.insert(1,
-                                        segments
-                                        .pop(segments
-                                             .index("double")))
-                        print(segments)
-                    print(segments)
-
-                    self.name_ = "_".join(segments)
-                    self.text_type = block["text_type"]
-
-    def to_filename(self):
-        segments = [segment.lower() for segment in self.name.split()]
-        print(segments)
-        for idx, segment in enumerate(segments):
-            if segment == "wood":
-                segments.pop(idx)
-                segments[-1] = segments[-1] + "s"
-                print("segments", segments)
-                return "_".join(segments) + ".json"
-
-    def create_block(self, dvs, location=preview_location):
+    def create_block(self, dvs=None, location=preview_location):
         "Create a block; anything that has an int location rather than float"
         self.location = location
         self.find_name(dvs)
@@ -99,11 +67,8 @@ class Block():
         self.readState()
 
         self.textures = self.model_stack["textures"]
-        pp = pprint.PrettyPrinter(indent=4)
-        pp.pprint(self.model_stack)
 
         self.generate_mesh()
-        print(self.name)
         self.object = bpy.data.objects.new(self.name, self.mesh)
 
         self.object.name = self.name
@@ -111,6 +76,26 @@ class Block():
 
         bpy.context.scene.objects.link(self.object)
         self.object.location = self.location
+
+        return self.mesh
+
+    def find_name(self, dvs):
+        dv1, dv2 = dvs
+        for block in self.defs:
+            if block["type"] == dv1:
+                if block["meta"] == dv2:
+                    self.name = block["name"]
+                    self.name_ = self.name.replace(" ", "_").lower()
+                    self.blockstate = block["blockstate"]
+
+    def to_filename(self):
+        segments = [segment.lower() for segment in self.name.split()]
+        print(segments)
+        for idx, segment in enumerate(segments):
+            if segment == "wood":
+                segments.pop(idx)
+                segments[-1] = segments[-1] + "s"
+                return "_".join(segments) + ".json"
 
     def to_path(self, pointer):
         if pointer.startswith("#"):
@@ -125,31 +110,22 @@ class Block():
 
         bm.loops.layers.uv.new()
         uv_layer = bm.loops.layers.uv[0]
-        print(uv_layer)
 
         nFaces = len(bm.faces)
-        print(nFaces)
 
         # Images
 
         # Create appropriate matreials
         for i, v in enumerate(self.textures.values()):
-            print("vaaalooo", v)
             name = self.to_path(v).split("/")[-1]
-            mat = Material.diffuse(self, name)
-            print("made new material ", mat)
+            material = Material()
+            mat = material.diffuse(self, name)
 
             if name in self.mesh.materials:
-                print(name, " is already in this material's list")
                 pass  # elf.mesh.materials[i] = mat
             else:
                 self.mesh.materials.append(mat)
                 self.mesh.materials[i] = mat
-                print("appending ", mat, "to the object since ",
-                      name, " isnt in", self.mesh.materials)
-
-        for mat in self.mesh.materials:
-            print("\n Materials", mat, mat == name)
 
         face_data = element["element"]["faces"]  # model data
 
@@ -161,7 +137,7 @@ class Block():
             #  Commence MLG UV foo
             if "uv" in data:
                 uv = 1 / 16 * Vector(data["uv"])
-                print(uv)
+                # print(uv)
                 x1, y1, x2, y2 = 1 / 16 * Vector(data["uv"])
                 element[face].loops[0][uv_layer].uv = (x2, y1)
                 element[face].loops[1][uv_layer].uv = (x1, y1)
@@ -186,10 +162,10 @@ class Block():
         print(self.name)
         filepath = path.join(Block.states, self.name_ + ".json")
         if not path.exists(filepath):
-                segments = self.name_.split("_")
-                switch = segments.pop(0)
-                self.name_ = "_".join(segments)
-                filepath = path.join(Block.states, self.name_ + ".json")
+            segments = self.name_.split("_")
+            switch = segments.pop(0)
+            self.name_ = "_".join(segments)
+            filepath = path.join(Block.states, self.name_ + ".json")
 
         with open(filepath) as state:
             state = json.load(state)
@@ -197,8 +173,8 @@ class Block():
         if "variants" in state:
             for variant in state["variants"].values():
                 if isinstance(variant, dict):
-                        print("variant", variant["model"])
-                        model_filename = variant["model"]
+                    print("variant", variant["model"])
+                    model_filename = variant["model"]
 
                 else:
                     print("variant", variant[0]["model"])
@@ -226,8 +202,9 @@ class Block():
                     else:
                         self.model_stack[k] = v
 
-    def generate_mesh(self):
+    def generate_mesh(self, faces):
 
+        # @TODO Impliment rotation to support; planar meshes particularly.
         elements = self.model_stack["elements"]
         for element in elements:
             bm = bmesh.new()
@@ -238,15 +215,30 @@ class Block():
             y = 2
             z = 1
 
-            one = bm.verts.new(Vector((vf[x], -vf[y], vf[z])))
-            two = bm.verts.new(Vector((vf[x], -vt[y], vf[z])))
-            three = bm.verts.new(Vector((vt[x], -vt[y], vf[z])))
-            four = bm.verts.new(Vector((vt[x], -vf[y], vf[z])))
+            def one(): bm.verts.new(Vector((vf[x], -vf[y], vf[z])))
 
-            five = bm.verts.new(Vector((vf[x], -vf[y], vt[z])))
-            six = bm.verts.new(Vector((vf[x], -vt[y], vt[z])))
-            seven = bm.verts.new(Vector((vt[x], -vt[y], vt[z])))
-            eight = bm.verts.new(Vector((vt[x], -vf[y], vt[z])))
+            def two(): bm.verts.new(Vector((vf[x], -vt[y], vf[z])))
+
+            def three(): bm.verts.new(Vector((vt[x], -vt[y], vf[z])))
+
+            def four(): bm.verts.new(Vector((vt[x], -vf[y], vf[z])))
+
+            def five(): bm.verts.new(Vector((vf[x], -vf[y], vt[z])))
+
+            def six(): bm.verts.new(Vector((vf[x], -vt[y], vt[z])))
+
+            def seven(): bm.verts.new(Vector((vt[x], -vt[y], vt[z])))
+
+            def eight(): = bm.verts.new(Vector((vt[x], -vf[y], vt[z])))
+
+            faces = {
+                "down": (six, five, eight, seven),
+                "up": (four, one, two, three),
+                "north": (two, three, seven, six),
+                "south": (four, one, five, eight),
+                "west": (one, two, six, five),
+                "east": (three, four, eight, seven)
+            }
 
             down = bm.faces.new((six, five, eight, seven))
             up = bm.faces.new((four, one, two, three))
@@ -254,8 +246,6 @@ class Block():
             south = bm.faces.new((four, one, five, eight))
             west = bm.faces.new((one, two, six, five))
             east = bm.faces.new((three, four, eight, seven))
-
-            print("\n", "locals", locals(), "\n")
 
             self.sort_textures(bm, locals())
             bm.to_mesh(self.mesh)
@@ -265,48 +255,128 @@ class Material():
 
     """Not yet implimented I'm not sure if its necessary."""
 
-    group = bpy.data.node_groups.new(type="ShaderNodeTree", name="diffuse")
+    def __init__(self):
 
-    group.inputs.new("NodeSocketColor", "Image")
-    group.inputs.new("NodeSocketColor", "Alpha")
-    input_node = group.nodes.new("NodeGroupInput")
+        self.group = bpy.data.node_groups.new(
+            type="ShaderNodeTree", name="diffuse")
 
-    group.outputs.new("ShaderNodeBsdfDiffuse", "Out")
-    output_node = group.nodes.new("NodeGroupOutput")
+        self.group.inputs.new("NodeSocketColor", "Image")
+        self.group.inputs.new("NodeSocketColor", "Alpha")
+        input_node = self.group.nodes.new("NodeGroupInput")
 
-    diffuse = group.nodes.new(type="ShaderNodeBsdfDiffuse")
-    trans = group.nodes.new(type="ShaderNodeBsdfTransparent")
-    mix = group.nodes.new(type="ShaderNodeMixShader")
-    mat = group.nodes.new(type="ShaderNodeOutputMaterial")
+        self.group.outputs.new("ShaderNodeBsdfDiffuse", "Out")
+        output_node = self.group.nodes.new("NodeGroupOutput")
 
-    group.links.new(input_node.outputs["Image"], diffuse.inputs[0])
-    group.links.new(input_node.outputs["Alpha"], mix.inputs[0])
-    group.links.new(diffuse.outputs[0], mix.inputs[2])
-    group.links.new(trans.outputs[0], mix.inputs[1])
-    group.links.new(mix.outputs[0], output_node.inputs[0])
-    group.links.new(mix.outputs[0], mat.inputs[0])
+        diffuse = self.group.nodes.new(type="ShaderNodeBsdfDiffuse")
+        trans = self.group.nodes.new(type="ShaderNodeBsdfTransparent")
+        mix = self.group.nodes.new(type="ShaderNodeMixShader")
+        mat = self.group.nodes.new(type="ShaderNodeOutputMaterial")
 
-    def diffuse(self, image_name=False):
-        mat = bpy.data.materials.new(self.to_path(image_name))
+        self.group.links.new(input_node.outputs["Image"], diffuse.inputs[0])
+        self.group.links.new(input_node.outputs["Alpha"], mix.inputs[0])
+        self.group.links.new(diffuse.outputs[0], mix.inputs[2])
+        self.group.links.new(trans.outputs[0], mix.inputs[1])
+        self.group.links.new(mix.outputs[0], output_node.inputs[0])
+        self.group.links.new(mix.outputs[0], mat.inputs[0])
+
+    def diffuse(self, block, image_name=False):
+        mat = bpy.data.materials.new(block.to_path(image_name))
         mat.use_nodes = True
         # mat.node_tree.nodes['Diffuse BSDF']
         group_node = mat.node_tree.nodes.new("ShaderNodeGroup")
-        group_node.node_tree = Material.group
+        group_node.node_tree = self.group
         tex = mat.node_tree.nodes.new(type="ShaderNodeTexImage")
 
         tex.image = bpy.data.images[image_name + ".png"]
         tex.interpolation = "Closest"
         mat.node_tree.links.new(tex.outputs[0], group_node.inputs["Image"])
         mat.node_tree.links.new(tex.outputs[1], group_node.inputs["Alpha"])
+
+        # My terrible grudge against simplified (US) english can be seen ahead!
+        p = list(tex.image.pixels)
+
+        R = p[slice(0, -1, 4)]
+        G = p[slice(1, -1, 4)]
+        B = p[slice(2, -1, 4)]
+        A = p[slice(3, -1, 4)]
+
+        hsv = [colorsys.rgb_to_hsv(r, g, b) for r, g, b in list(zip(R, G, B))]
+
+        def mean(v): return float(sum(v)) / len(v) if len(v) else 0
+
+        hue, sat, val = zip(*hsv)
+
+        mean_colour = colorsys.hsv_to_rgb(mean(hue), 1, mean(val))
+
+        mat.diffuse_color = mean_colour  # for solid viewport
+
         return mat
+
+
+class BlockMass(Block):
+
+    """ Reimplimentation of what mineways gives us """
+
+    def create_cluster(self, location, blocks):
+
+        object_handler = {}
+
+        for z in range(zMin, zMax + 1):
+            for y in range(yMin, yMax + 1):
+                for x in range(xMin, xMax + 1):
+                    block_id = blocks[0][x][y][z]
+                    if block_id not in 0:
+                        sides = sides(blocks, (x, y, z))  # Make a generator?
+                        if True in sides.values():
+                            if block_id in object_handler:
+                                pass
+                                # Get the instance and make it generate the
+                                # the indices for the faces provided.
+                            else:
+                                pass
+                                # create an instance of a BlockMass and
+                                # add it to the dictionary.
+
+    def sides(blocks, (x, y, z)):
+        """Return a list of tuplesBlock ID and data.
+            [up, down, north, south, east, west]"""
+
+        faces = {
+            "up": False,
+            "down": False,
+            "north": False,
+            "south": False,
+            "east": False,
+            "west": False
+        }
+
+        block_id = blocks[0][x][y][z]
+
+        if blocks[0][x][y + 1][z] != block_id:  # up
+            faces["up"] = True
+
+        if blocks[0][x][y - 1][z] != block_id:  # down
+            faces["down"] = True
+
+        if blocks[0][x][y][z - 1] != block_id:  # north
+            faces["north"] = True
+
+        if blocks[0][x][y][z + 1] != block_id:  # south
+            faces["south"] = True
+
+        if blocks[0][x + 1][y][z] != block_id:  # east
+            faces["east"] = True
+
+        if blocks[0][x - 1][y][z] != block_id:  # west
+            faces["west"] = True
+
+        return faces
 
 
 def main():
     graniteblock = Block()
-    dvs = [1, 1]
+    dvs = [3, 0]
     graniteblock.create_block(dvs)
-    print(graniteblock.name)
-    print(graniteblock.model_stack)
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(graniteblock.model_stack)
 
