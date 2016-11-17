@@ -35,9 +35,10 @@
 #"Load horizon" / "load radius": should be circular, or have options
 
 import bpy
+
 from bpy.props import FloatVectorProperty
 from mathutils import Vector
-from .blocks.block import Block
+from .block import Block, BlockCluster
 import numpy as npy
 # from Mineblend import blockbuild
 from . import MCPATH, MCSAVEPATH
@@ -599,7 +600,12 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
 
     wm.progress_end()
     tBuild0 = datetime.datetime.now()
-    batchBuild(meshBuffer)
+
+    print("creating clusters")
+    bc = BlockCluster(OPTIONS)
+    bc.create_cluster((blockBuffer, extraBuffer))
+    print("clusters complete")
+
     if (OPTIONS['showslimes']):
         batchSlimeChunks(slimeBuffer)
     tBuild1 = datetime.datetime.now()
@@ -641,9 +647,6 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
     # increase viewport clip dist to see the world! (or decrease mesh sizes)
     # bpy.types.Space...
     # Actually: scale world root down to 0.05 by default?
-
-
-def facing_air(location, blockbuffer):
 
 
 def blockSurroundedBy(blockAry, blockGroupAry, x, y, z):

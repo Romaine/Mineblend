@@ -7,7 +7,7 @@ from .mineregion import OPTIONS, EXCLUDED_BLOCKS,  REPORTING, unknownBlockIDs, W
 # ..yuck: they're immutable and don't return properly except for the dict-type ones. Get rid of this in next cleanup.
 
 from math import floor
-from .blocks.block import Block
+from .block import Block
 
 
 class AnvilChunkReader(mcregionreader.ChunkReader):
@@ -376,8 +376,12 @@ class AnvilChunkReader(mcregionreader.ChunkReader):
                 # dataX will be dX, blender X will be bX.
                 for dZ in range(CHUNKSIZE_Z):
                     for dX in range(CHUNKSIZE_X):
-                        blockIndex = sy * 16 * 16 + dZ * 16 + dX
-                        blockID = blockData[blockIndex]
+                        blockIndex = (sy * 16 + dZ) * 16 + dX
+                        blockID_a = blockData[blockIndex]
+
+                        blockID_b = AnvilChunkReader.nibble4(
+                            add, blockindex) if add else 0
+                        blockID = blockID_a + (blockID_b << 8)
 
                         # create this block in the output!
 
@@ -385,13 +389,13 @@ class AnvilChunkReader(mcregionreader.ChunkReader):
                             REPORTING['blocksread'] += 1
                             if any(d["type"] == blockID for d in Block.defs):
                                 extraValue = AnvilChunkReader.nibble4(
-                                    blockData, blockIndex)
+                                    extraData, blockIndex)
                                 processFunc(blockID, extraValue, dX, dY, dZ)
                             else:
                                 unknownBlockIDs.add(blockID)
 
     def nibble4(arr, idx):
-        return arr[int(idx / 2)] & 0x0f if idx % 2 == 0 else (arr[int(idx / 2)] >> 4) & 0x0f
+        return arr[floor(idx / 2)] & 0x0f if idx % 2 == 0 else (arr[floor(idx / 2)] >> 4) & 0x0f
 
     def _loadEntities(entities):
         global WORLD_ROOT

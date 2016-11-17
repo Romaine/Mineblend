@@ -8,7 +8,7 @@ from . import nbtreader
 from mathutils import Vector
 from .mineregion import OPTIONS, EXCLUDED_BLOCKS, REPORTING, unknownBlockIDs, getMCBlockType, mcToBlendCoord  # yuck!
 # ..yuck: they're immutable and don't return properly except for the dict-type ones. Get rid of this in next cleanup.
-from .blocks.block import Block
+from .block import Block
 
 
 class ChunkReader:

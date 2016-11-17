@@ -46,7 +46,7 @@ import bpy
 from os import path
 from bpy.props import StringProperty, FloatProperty, IntProperty, BoolProperty, EnumProperty
 
-from .blocks.block import Block
+from .block import Block, BlockCluster
 from .blocks import resourcepacks
 
 
@@ -71,7 +71,7 @@ import sys
 
 # TODO: tidy this up to one location (double defined here from mineregion)
 
-
+OPTIONS = {}
 MCSAVEPATH = os.path.join(MCPATH, 'saves/')
 
 
