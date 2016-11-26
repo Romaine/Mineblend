@@ -46,6 +46,8 @@ class Block():
                     elif root.split(os.sep)[-1] == "item":
                         models["item"][file] = json.load(f)
 
+
+
     def __init__(self):
         self.bm = bmesh.new()
 
@@ -60,7 +62,45 @@ class Block():
         self.object = None
         self.model_stack = {}
         self.verts = {}
+        self.faces = []
         self.dvs = ()
+
+    def vert_map(element):
+        vf = Vector(element["from"]) / 16
+        vt = Vector(element["to"]) / 16
+
+        x = 0
+        y = 2
+        z = 1
+
+        verts = {
+            "one": Vector((vf[x], -vf[y], vf[z])),
+
+            "two": Vector((vf[x], -vt[y], vf[z])),
+
+            "three": Vector((vt[x], -vt[y], vf[z])),
+
+            "four": Vector((vt[x], -vf[y], vf[z])),
+
+            "five": Vector((vf[x], -vf[y], vt[z])),
+
+            "six": Vector((vf[x], -vt[y], vt[z])),
+
+            "seven": Vector((vt[x], -vt[y], vt[z])),
+
+            "eight": Vector((vt[x], -vf[y], vt[z])),
+        }
+
+        return verts
+
+    face_map = {
+        "down": ("six", "five", "eight", "seven"),
+        "up": ("four", "one", "two", "three"),
+        "north": ("two", "three", "seven", "six"),
+        "south": ("four", "one", "five", "eight"),
+        "west": ("one", "two", "six", "five"),
+        "east": ("three", "four", "eight", "seven")
+    }
 
     def create_block(self, dvs=None, location=preview_location):
         "Create a block; anything that has an int location rather than float"
@@ -77,14 +117,7 @@ class Block():
         self.textures = self.model_stack["textures"]
 
         self.generate_mesh()
-        self.object = bpy.data.objects.new(self.name, self.mesh)
-
-        self.object.name = self.name
-        self.mesh.name = self.name
-
-        bpy.context.scene.objects.link(self.object)
-        self.object.location = self.location
-
+        self.finalise()
         return self.mesh
 
     def find_name(self, dvs):
@@ -98,62 +131,74 @@ class Block():
                     self.blockstate = block["blockstate"]
 
     def to_path(self, pointer):
+        """Converts a path name or tag to the name"""
         if pointer.startswith("#"):
             return self.to_path(self.textures[pointer[1:]])
         else:
             return pointer
 
-    def sort_textures(self, bm, element, faces):
+    def materials(self):
+        mat = None
+        material = Material()
+        for i, v in enumerate(self.textures.values()):
+            if not v.startswith("#"):
+                name = self.to_path(v).split("/")[-1]
+
+                if not name.split(".")[0] in bpy.data.materials:
+                    mat = material.diffuse(self, name)
+                else:
+                    mat = bpy.data.materials[name]
+
+                if not self.mesh.materials:
+                    self.mesh.materials.append(mat)
+                else:
+                    self.mesh.materials.append(mat)
+
+    def sort_textures(self):
+        elements = self.model_stack["elements"]
 
         # UV's
 
-        bm.loops.layers.uv.new()
-        uv_layer = bm.loops.layers.uv[0]
-
-        nFaces = len(bm.faces)
-
-        # Images
-
-        # Create appropriate matreials
-        for i, v in enumerate(self.textures.values()):
-            name = self.to_path(v).split("/")[-1]
-            material = Material()
-            mat = material.diffuse(self, name)
-
-            if name.split(".")[0] in self.mesh.materials:
-        #        self.mesh.materials[i] = mat
-        #    else:
-                self.mesh.materials.append(mat)
-        #        self.mesh.materials[i] = mat
+        self.bm.loops.layers.uv.new()
+        uv_layer = self.bm.loops.layers.uv[0]
 
         # Assign materials to respective faces.
 
-        for face, data in element["faces"].items():
-            texture = self.to_path(data["texture"])
+        for element in elements:
+            face_data = element["faces"]
 
-            #  Commence MLG UV foo
-            if "uv" in data:
-                uv = 1 / 16 * Vector(data["uv"])
-                # print(uv)
-                x1, y1, x2, y2 = 1 / 16 * Vector(data["uv"])
-                faces[face].loops[0][uv_layer].uv = (x2, y1)
-                faces[face].loops[1][uv_layer].uv = (x1, y1)
-                faces[face].loops[2][uv_layer].uv = (x1, y2)
-                faces[face].loops[3][uv_layer].uv = (x2, y2)
-            else:
-                faces[face].loops[0][uv_layer].uv = (1, 0)
-                faces[face].loops[1][uv_layer].uv = (0, 0)
-                faces[face].loops[2][uv_layer].uv = (0, 1)
-                faces[face].loops[3][uv_layer].uv = (1, 1)
+            for face, data in face_data.items():
 
-            for i, mat in enumerate(self.mesh.materials):
+                texture = self.to_path(data["texture"])
+
+                for box in self.faces:
+                    for facemesh in box[face]:
+
+                        #  Commence MLG UV foo
+                        if "uv" in data:
+                            # print(uv)
+                            x1, y1, x2, y2 = 1 / 16 * Vector(data["uv"])
+                            facemesh.loops[0][uv_layer].uv = (x2, y1)
+                            facemesh.loops[1][uv_layer].uv = (x1, y1)
+                            facemesh.loops[2][uv_layer].uv = (x1, y2)
+                            facemesh.loops[3][uv_layer].uv = (x2, y2)
+                        else:
+                            facemesh.loops[0][uv_layer].uv = (1, 0)
+                            facemesh.loops[1][uv_layer].uv = (0, 0)
+                            facemesh.loops[2][uv_layer].uv = (0, 1)
+                            facemesh.loops[3][uv_layer].uv = (1, 1)
+
+        for i, mat in enumerate(self.mesh.materials):
+            for face, data in element["faces"].items():
+                texture = self.to_path(data["texture"])
+                texture = self.to_path(data["texture"])
                 if mat.name.split(".")[0] == texture.split("/")[1]:
-                    faces[face].material_index = i
+                    for face in box[face]:
+                        face.material_index = i
 
-            # @TODO Stop images of the same name from overwriting eachother
-            #       by prepending their path.
+        # @TODO Stop images of the same name from overwriting eachother
+        #       by prepending their path.
 
-        bm.to_mesh(self.mesh)
 
     def readState(self):
         # print(self.name)
@@ -199,73 +244,38 @@ class Block():
                         self.model_stack[k] = v
 
     def generate_mesh(self, to_draw=None, offset=Vector([0] * 3)):
-
         # @TODO Impliment rotation to support; planar meshes particularly.
         elements = self.model_stack["elements"]
 
         bm = self.bm
 
         if not len(self.bm.verts) % 500:
-            print(len(self.bm.verts))
+            print(self.name, "verts", len(self.bm.verts))
 
-        for element in elements:
-            vf = Vector(element["from"]) / 16
-            vt = Vector(element["to"]) / 16
+        for i, element in enumerate(elements):
+            vert_map = Block.vert_map(element)
+            vert_map.update((k, v + offset) for k, v in vert_map.items())
 
-            x = 0
-            y = 2
-            z = 1
-
-            face_instance = {}
-
-            verts = {
-                "one": Vector((vf[x], -vf[y], vf[z])),
-
-                "two": Vector((vf[x], -vt[y], vf[z])),
-
-                "three": Vector((vt[x], -vt[y], vf[z])),
-
-                "four": Vector((vt[x], -vf[y], vf[z])),
-
-                "five": Vector((vf[x], -vf[y], vt[z])),
-
-                "six": Vector((vf[x], -vt[y], vt[z])),
-
-                "seven": Vector((vt[x], -vt[y], vt[z])),
-
-                "eight": Vector((vt[x], -vf[y], vt[z])),
-            }
-
-            verts.update((k, offset + v) for k, v in verts.items())
-
-            faces = {
-                "down": ("six", "five", "eight", "seven"),
-                "up": ("four", "one", "two", "three"),
-                "north": ("two", "three", "seven", "six"),
-                "south": ("four", "one", "five", "eight"),
-                "west": ("one", "two", "six", "five"),
-                "east": ("three", "four", "eight", "seven")
-            }
-
-            for face in faces.keys():
-                if to_draw:
-                    if face not in to_draw.keys():
-                        del faces[face]
-                else:
+            for face in Block.face_map.keys():
+                if not to_draw:
                     to_draw = element["faces"]
 
-            for face in to_draw:
-                for vert in faces[face]:
-                    if verts[vert].freeze() not in self.verts:
-                        self.verts[vert] = bm.verts.new(verts[vert])
+            for face, present in to_draw.items():
+                if present:
+                    if not len(self.faces) >= i+1:
+                        self.faces.append({})
+                    if face not in self.faces[i]:
+                        self.faces[i][face] = []
 
-                face_instance[face] = bm.faces.new(
-                    self.verts[vert] for vert in faces[face])
+                    self.faces[i][face].append(bm.faces.new(bm.verts.new(vert_map[vert]) for vert in Block.face_map[face]))
 
-            #self.sort_textures(bm, element, face_instance)
-            # Textures are are currently very unoptimised
+
+                    # currently not working
+                    # self.faces[face].append(bm.faces.new([self.verts[vert_map[vert].freeze()] for vert in Block.face_map[face]]))
 
     def finalise(self):
+        self.materials()
+        self.sort_textures()
         self.bm.to_mesh(self.mesh)
         self.object = bpy.data.objects.new(self.name, self.mesh)
 
@@ -304,6 +314,7 @@ class Material():
         self.group.links.new(mix.outputs[0], mat.inputs[0])
 
     def diffuse(self, block, image_name=False):
+        # print("starting diffuse")
         mat = bpy.data.materials.new(block.to_path(image_name))
         mat.use_nodes = True
         # mat.node_tree.nodes['Diffuse BSDF']
@@ -329,10 +340,12 @@ class Material():
         def mean(v): return float(sum(v)) / len(v) if len(v) else 0
 
         hue, sat, val = zip(*hsv)
-
-        mean_colour = colorsys.hsv_to_rgb(mean(hue), 1, mean(val))
+        saturation = mean(sat) if sum(R) == sum(G) == sum(B) else 1
+        mean_colour = colorsys.hsv_to_rgb(mean(hue), saturation, mean(val))
 
         mat.diffuse_color = mean_colour  # for solid viewport
+
+        #print("end of diffuse")
 
         return mat
 
@@ -352,6 +365,7 @@ class BlockCluster(Block):
         self.xMax = numElements - 1
         self.zMax = numElements - 1
         self.zMin = 0
+        print(self.verts)
 
     def sides(self, blocks, location):
         """Return a list of tuples; Block ID and data.
@@ -402,9 +416,9 @@ class BlockCluster(Block):
 
         clusters = {}
         i = 0
-        for z in range(self.zMin, self.zMax + 1):
-            for y in range(self.yMin, self.yMax + 1):
-                for x in range(self.xMin, self.xMax + 1):
+        for x in range(self.zMin, self.xMax):
+            for y in range(self.yMin, self.yMax):
+                for z in range(self.xMin, self.zMax):
                     block_id = blocks[0][x][y][z]
                     if block_id not in [0, 8, 9, 10, 11, 18, 162]:
                         sides = self.sides(blocks, (x, y, z))  # Make a generator?
@@ -415,15 +429,14 @@ class BlockCluster(Block):
                                 clusters[block_id] = BlockCluster(self.options)
                                 clusters[block_id].cluster(dvs)
 
-                            clusters[block_id].generate_mesh(sides, Vector((x, y, z)))
+                            clusters[block_id].generate_mesh(sides, Vector((x, z, y)))  # The second parameter determines the orientation of the terrain outputted.
 
                             if not i % 100:
-                                print(i)
+                                print("total blocks processed", i)
                             i += 1
 
         for cluster in clusters:
             clusters[cluster].finalise()
-
 
     def cluster(self, dvs):
         print("finding name")
@@ -441,7 +454,7 @@ class BlockCluster(Block):
 
 def main():
     graniteblock = Block()
-    dvs = [0, 0]
+    dvs = [62, 0]
     graniteblock.create_block(dvs)
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(graniteblock.model_stack)

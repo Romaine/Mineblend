@@ -537,6 +537,12 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
                 regionreader.processChunk2(
                     x, z, blockBuffer, extraBuffer, zeroAdjX, zeroAdjZ)
 
+                tChunk1 = datetime.datetime.now()
+
+                chunkTime = tChunk1 - tChunk0
+                if (OPTIONS['showslimes']):
+                    tChunkReadTimes.append(chunkTime.total_seconds())	#tString = "%.2f seconds" % chunkTime.total_seconds()
+    """
     if (OPTIONS['showslimes']):
         if slimes.isSlimeSpawn(wseed, x, z):
             slimeLoc = mcToBlendCoord((x, z), (8, 8, 8))  # (8,8,120)
@@ -557,9 +563,7 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
             print("hiding sides")
         progMax = (zMax + 1) - zMin
         progCounter = 0
-
-        defs = Block.defs
-
+    defs = Block.defs
         for z in range(zMin, zMax + 1):
             wm.progress_update((49 + (progCounter / progMax) / 2) * 100)
             progCounter += 1
@@ -599,12 +603,9 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
                         #    blockID, (x, y, z), extraValue, meshBuffer)
 
     wm.progress_end()
+
     tBuild0 = datetime.datetime.now()
 
-    print("creating clusters")
-    bc = BlockCluster(OPTIONS)
-    bc.create_cluster((blockBuffer, extraBuffer))
-    print("clusters complete")
 
     if (OPTIONS['showslimes']):
         batchSlimeChunks(slimeBuffer)
@@ -616,7 +617,11 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
     if len(unknownBlockIDs) > 0:
         print("Unknown new Minecraft datablock IDs encountered:")
         print(" ".join(["%d" % bn for bn in unknownBlockIDs]))
-
+"""
+    print("creating clusters")
+    bc = BlockCluster(OPTIONS)
+    bc.create_cluster((blockBuffer, extraBuffer))
+    print("clusters complete")
     # Viewport performance hides:
     if (OPTIONS['fasterViewport']):
         hideIfPresent('mcStone')
@@ -628,6 +633,7 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
         hideIfPresent('mcBedrock')
         hideIfPresent('mcRedstoneOre')
 
+    """
     # Profile/run stats:
     chunkReadTotal = tChunkReadTimes[0]
     for tdiff in tChunkReadTimes[1:]:
@@ -643,7 +649,7 @@ def readMinecraftWorld(self, worldFolder, loadRadius, toggleOptions):
               (REPORTING['blocksread'] - REPORTING['blocksdropped']))
         print("Hollowing has made the scene %d%% lighter" %
               ((REPORTING['blocksdropped'] / REPORTING['blocksread']) * 100))
-
+"""
     # increase viewport clip dist to see the world! (or decrease mesh sizes)
     # bpy.types.Space...
     # Actually: scale world root down to 0.05 by default?

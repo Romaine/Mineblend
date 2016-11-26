@@ -1,7 +1,7 @@
 """ This handles relative imports"""
 
 from importlib import reload
-from Mineblend.blocks import block, resourcepacks
+from blocks import block, resourcepacks
 
 reload(block)
 reload(resourcepacks)
