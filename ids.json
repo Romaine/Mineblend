@@ -264,6 +264,102 @@
     "blockstate": "jungle_leaves"
   },
   {
+    "type": 18,
+    "meta": 0,
+    "name": "Oak Leaves",
+    "blockstate": "oak_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 1,
+    "name": "Spruce Leaves",
+    "blockstate": "spruce_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 2,
+    "name": "Birch Leaves",
+    "blockstate": "birch_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 3,
+    "name": "Jungle Leaves",
+    "blockstate": "jungle_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 4,
+    "name": "Oak Leaves",
+    "blockstate": "oak_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 5,
+    "name": "Spruce Leaves",
+    "blockstate": "spruce_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 6,
+    "name": "Birch Leaves",
+    "blockstate": "birch_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 7,
+    "name": "Jungle Leaves",
+    "blockstate": "jungle_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 8,
+    "name": "Oak Leaves",
+    "blockstate": "oak_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 9,
+    "name": "Spruce Leaves",
+    "blockstate": "spruce_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 10,
+    "name": "Birch Leaves",
+    "blockstate": "birch_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 11,
+    "name": "Jungle Leaves",
+    "blockstate": "jungle_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 12,
+    "name": "Oak Leaves",
+    "blockstate": "oak_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 13,
+    "name": "Spruce Leaves",
+    "blockstate": "spruce_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 14,
+    "name": "Birch Leaves",
+    "blockstate": "birch_leaves"
+  },
+  {
+    "type": 18,
+    "meta": 15,
+    "name": "Jungle Leaves",
+    "blockstate": "jungle_leaves"
+  },
+  {
     "type": 19,
     "meta": 0,
     "name": "Sponge",

@@ -94,12 +94,12 @@ class Block():
         return verts
 
     face_map = {
-        "down": ("six", "five", "eight", "seven"),
-        "up": ("four", "one", "two", "three"),
+        "up": ("eight", "five", "six", "seven"),
+        "down": ("four", "one", "two", "three"),
         "north": ("two", "three", "seven", "six"),
         "south": ("four", "one", "five", "eight"),
-        "west": ("one", "two", "six", "five"),
-        "east": ("three", "four", "eight", "seven")
+        "east": ("one", "two", "six", "five"),
+        "west": ("three", "four", "eight", "seven")
     }
 
     def create_block(self, dvs=None, location=preview_location):
@@ -114,7 +114,13 @@ class Block():
         pp = pprint.PrettyPrinter(indent=4)
         pp.pprint(self.model_stack)
 
-        self.textures = self.model_stack["textures"]
+        textures = self.model_stack["textures"]
+
+        if textures:
+            self.textures = textures
+        else:
+            return
+            # Deal with liquid problem
 
         self.generate_mesh()
         self.finalise()
@@ -163,6 +169,22 @@ class Block():
         uv_layer = self.bm.loops.layers.uv[0]
 
         # Assign materials to respective faces.
+        print("Textures", self.textures)
+
+        for tag in Block.face_map.keys():
+            if tag not in self.textures.keys():
+                if "side" in self.textures:
+                    self.textures["east"] = self.textures["side"]
+                    self.textures["west"] = self.textures["side"]
+                    self.textures["north"] = self.textures["side"]
+                    self.textures["south"] = self.textures["side"]
+
+                self.textures["up"] = self.textures["top"]
+                self.textures["down"] = self.textures["bottom"]
+
+                # del self.textures["side"]
+                # del self.textures["top"]
+                # del self.textures["bottom"]
 
         for element in elements:
             face_data = element["faces"]
@@ -178,20 +200,23 @@ class Block():
                         if "uv" in data:
                             # print(uv)
                             x1, y1, x2, y2 = 1 / 16 * Vector(data["uv"])
-                            facemesh.loops[0][uv_layer].uv = (x2, y1)
-                            facemesh.loops[1][uv_layer].uv = (x1, y1)
-                            facemesh.loops[2][uv_layer].uv = (x1, y2)
-                            facemesh.loops[3][uv_layer].uv = (x2, y2)
+                            facemesh.loops[0][uv_layer].uv = (x1, y1)
+                            facemesh.loops[1][uv_layer].uv = (x2, y1)
+                            facemesh.loops[2][uv_layer].uv = (x2, y2)
+                            facemesh.loops[3][uv_layer].uv = (x1, y2)
                         else:
-                            facemesh.loops[0][uv_layer].uv = (1, 0)
-                            facemesh.loops[1][uv_layer].uv = (0, 0)
-                            facemesh.loops[2][uv_layer].uv = (0, 1)
-                            facemesh.loops[3][uv_layer].uv = (1, 1)
+                            facemesh.loops[0][uv_layer].uv = (0, 0)
+                            facemesh.loops[1][uv_layer].uv = (1, 0)
+                            facemesh.loops[2][uv_layer].uv = (1, 1)
+                            facemesh.loops[3][uv_layer].uv = (0, 1)
 
         for i, mat in enumerate(self.mesh.materials):
             for face, data in element["faces"].items():
                 texture = self.to_path(data["texture"])
-                texture = self.to_path(data["texture"])
+                if data["texture"] == "#overlay":
+                    # skip
+                    pass
+
                 if mat.name.split(".")[0] == texture.split("/")[1]:
                     for face in box[face]:
                         face.material_index = i
@@ -199,14 +224,19 @@ class Block():
         # @TODO Stop images of the same name from overwriting eachother
         #       by prepending their path.
 
-
     def readState(self):
         # print(self.name)
         filepath = path.join(Block.states, self.name_ + ".json")
         if not path.exists(filepath):
             filepath = path.join(Block.states, self.blockstate + ".json")
             if not path.exists(filepath):
-                print("No blockstate file for", "Name:", self.name, "dataid", self.dvs)
+                self.liquid()
+                if self.dvs[0] in [8, 9, 10, 11]:
+                    self.compile_model_stack("cube_all")
+                    self.textures.append()
+                    return
+                else:
+                    print("No blockstate file for", "Name:", self.name, "dataid", self.dvs)
 
         with open(filepath) as state:
             state = json.load(state)
@@ -214,11 +244,11 @@ class Block():
         if "variants" in state:
             for variant in state["variants"].values():
                 if isinstance(variant, dict):
-                    # print("variant", variant["model"])
+                    print("variant", variant["model"])
                     model_filename = variant["model"]
 
                 else:
-                    # print("variant", variant[0]["model"])
+                    print("variant", variant[0]["model"])
                     model_filename = variant[0]["model"]
         else:
             for part in state["multipart"]:
@@ -242,6 +272,9 @@ class Block():
                             self.model_stack[k][k2] = v2
                     else:
                         self.model_stack[k] = v
+
+    def liquid(self):
+        pass
 
     def generate_mesh(self, to_draw=None, offset=Vector([0] * 3)):
         # @TODO Impliment rotation to support; planar meshes particularly.
@@ -420,10 +453,12 @@ class BlockCluster(Block):
             for y in range(self.yMin, self.yMax):
                 for z in range(self.xMin, self.zMax):
                     block_id = blocks[0][x][y][z]
-                    if block_id not in [0, 8, 9, 10, 11, 18, 162]:
+                    if block_id not in [0, 166, 8, 9, 10, 11]:
                         sides = self.sides(blocks, (x, y, z))  # Make a generator?
                         if True in sides.values():
                             dvs = (blocks[0][x][y][z], blocks[1][x][y][z])
+
+                            print(dvs)
 
                             if block_id not in clusters:
                                 clusters[block_id] = BlockCluster(self.options)
@@ -454,7 +489,7 @@ class BlockCluster(Block):
 
 def main():
     graniteblock = Block()
-    dvs = [62, 0]
+    dvs = [2, 0]
     graniteblock.create_block(dvs)
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(graniteblock.model_stack)
